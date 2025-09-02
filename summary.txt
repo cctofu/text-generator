@@ -1,0 +1,180 @@
+########################
+# Missing Files
+########################
+# .DS_Store
+
+########################
+# Additional Files
+########################
+# output.txt
+# tokenizer
+# __pycache__
+# data
+# train_test
+# plot.py
+
+########################
+# Filled Code
+########################
+# ../codes/model_tfmr.py:1
+            # Reference: https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
+            torch.tril(torch.ones((max_positions, max_positions), dtype=torch.bool)).view(
+                1, 1, max_positions, max_positions
+            ),
+
+# ../codes/model_tfmr.py:2
+        # Reference: https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
+        attn_scores = torch.matmul(query, key.transpose(-2, -1))
+            scale_factor = (value.size(-1) ** 0.5)
+            attn_scores = attn_scores / scale_factor
+        causal_mask = self.bias[..., key.size(-2) - query.size(-2):key.size(-2), :key.size(-2)].bool()
+        attn_scores = torch.where(causal_mask, attn_scores, self.masked_bias.to(attn_scores.dtype))
+        attn_weights = F.softmax(attn_scores, dim=-1)
+        attn_output = torch.matmul(attn_weights, value)
+
+# ../codes/model_tfmr.py:3
+        # Reference: https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
+        new_shape = tensor.size()[:-1] + (num_heads, attn_head_size)
+        tensor = tensor.view(*new_shape).permute(0, 2, 1, 3)
+        return tensor
+
+# ../codes/model_tfmr.py:4
+        # Reference: https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
+        tensor = tensor.permute(0, 2, 1, 3).contiguous()
+        new_shape = tensor.size()[:-2] + (num_heads * attn_head_size,)
+        tensor = tensor.view(*new_shape)
+        return tensor
+
+# ../codes/model_tfmr.py:5
+        # Reference: https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
+        # HINT: You can refer to Page 39 in lecture 8 for more details
+        # hidden_states =
+        updated_hidden_states = residual + attn_output
+        layer_input = updated_hidden_states
+        normalized_hidden_states = self.ln_2(updated_hidden_states)
+        mlp_output = self.mlp(normalized_hidden_states)
+        hidden_states = layer_input + mlp_output
+
+# ../codes/model_tfmr.py:6
+        # Reference: https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
+        # position_embeds =
+        # Generate position IDs starting from `past_length` to `input_shape[-1] + past_length`
+        position_ids = torch.arange(start=past_length, end=input_shape[-1] + past_length, dtype=torch.long, device=device)
+        position_ids = position_ids.unsqueeze(dim=0)
+        position_embeds = self.wpe(position_ids)
+
+# ../codes/model_tfmr.py:7
+            labels = labels.to(lm_logits.device)
+            shifted_logits = lm_logits[..., :-1, :].contiguous()
+            shifted_labels = labels[..., 1:].contiguous()
+            valid_position_mask = torch.ones_like(labels, dtype=torch.float)
+            valid_position_mask[:, 1:] = (shifted_labels != PAD_ID).float()
+            valid_position_mask = valid_position_mask[:, :-1]
+            elementwise_loss = ce_loss_fct(shifted_logits.transpose(1, 2), shifted_labels)
+            loss = (elementwise_loss * valid_position_mask).sum(dim=1) / (valid_position_mask.sum(dim=1) + 1e-15)
+            loss = loss.mean()
+
+# ../codes/model_tfmr.py:8
+                        probabilities = logits.softmax(dim=-1)
+                        sorted_probabilities, sorted_indices = probabilities.sort()
+                        cumulative_probabilities = sorted_probabilities.cumsum(dim=-1)
+                        top_p_mask = cumulative_probabilities <= (1 - top_p)
+                        reordered_mask = top_p_mask.scatter(1, sorted_indices, top_p_mask)
+                        logits = logits.masked_fill(reordered_mask, -torch.inf)
+
+# ../codes/main.py:1
+            model_outputs = model(input_ids)
+            logits = model_outputs["logits"]
+            target_logits = logits[..., :-1, :].contiguous()
+            next_tokens = input_ids[..., 1:].contiguous()
+            loss_computation_mask = torch.ones_like(input_ids, dtype=torch.float)
+            loss_computation_mask[:, 1:] = (next_tokens != PAD_ID).float()
+            loss_computation_mask = loss_computation_mask[:, :-1]
+
+            per_token_loss = ce_loss_fct(target_logits.transpose(1, 2), next_tokens)
+
+            loss = (per_token_loss * loss_computation_mask).sum(dim=1) / (loss_computation_mask.sum(dim=1) + 1e-15)
+
+
+########################
+# References
+########################
+# https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
+
+########################
+# Other Modifications
+########################
+# _codes/model_tfmr.py -> ../codes/model_tfmr.py
+# 324 +
+# _codes/main.py -> ../codes/main.py
+# 19 - parser.add_argument("--name", type=str, default="run",
+# 19 + parser.add_argument(
+# 20 +     "--name",
+# 21 +     type=str,
+# 22 +     default="run",
+# 20 -     help="Experiment name. Default: run")
+# 20 ?                                         -
+# 23 +     help="Experiment name. Default: run"
+# 21 - parser.add_argument("--model_config", type=str, default="./config.json",
+# 24 + )
+# 25 + parser.add_argument(
+# 26 +     "--model_config",
+# 27 +     type=str,
+# 28 +     default="./config.json",
+# 22 -     help="Path to the configuration file. Default: ./config.json")
+# 22 ?                                                                  -----
+# 29 +     help="Path to the configuration file. Default: ./config.json"
+# 23 - parser.add_argument("--tokenizer_dir", type=str, default="./tokenizer",
+# 30 + )
+# 31 + parser.add_argument(
+# 32 +     "--tokenizer_dir",
+# 33 +     type=str, default="./tokenizer",
+# 24 -     help="Tokenizer file directory. Default: ./tokenizer")
+# 24 ?                                                          -----
+# 34 +     help="Tokenizer file directory. Default: ./tokenizer"
+# 25 - parser.add_argument("--num_epochs", type=int, default=20,
+# 35 + )
+# 36 + parser.add_argument(
+# 37 +     "--num_epochs",
+# 38 +     type=int,
+# 39 +     default=20,
+# 26 -     help="Number of training epoch. Default: 20")
+# 26 ?                                                 -
+# 40 +     help="Number of training epoch. Default: 20"
+# 27 - parser.add_argument("--cpu_count", type=int, default=20,
+# 41 + )
+# 42 + parser.add_argument(
+# 43 +     "--cpu_count",
+# 44 +     type=int,
+# 45 +     default=20,
+# 28 -     help="Number of CPU cores for evaluation. Default: 20")
+# 28 ?                                                           -----
+# 46 +     help="Number of CPU cores for evaluation. Default: 20"
+# 47 + )
+# 39 - parser.add_argument("--pretrain_dir", type=str, default="None",
+# 39 ?                                                         -    -
+# 58 + parser.add_argument("--pretrain_dir", type=str, default=None,
+# 47 - parser.add_argument("--top_p", type=float, default=1.0,
+# 47 ?                                                    ^ ^
+# 66 + parser.add_argument("--top_p", type=float, default=0.9,
+# 66 ?                                                    ^ ^
+# 217 +
+# 218 +     # save loss data
+# 219 +     training_losses = []
+# 220 +     validation_losses = []
+# 262 +             # save train loss
+# 263 +             training_losses.append(train_loss)
+# 266 +             # save validation loss
+# 267 +             validation_losses.append(val_loss)
+# 304 +     # Convert the tensors to lists
+# 305 +     training_losses_list = [loss.item() for loss in training_losses]
+# 306 +     validation_losses_list = [loss.item() for loss in validation_losses]
+# 307 +
+# 308 +     # Save training losses to a file
+# 309 +     with open('training_losses2.json', 'w') as f:
+# 310 +         json.dump(training_losses_list, f)
+# 311 +
+# 312 +     # Save validation losses to a file
+# 313 +     with open('validation_losses2.json', 'w') as f:
+# 314 +         json.dump(validation_losses_list, f)
+
